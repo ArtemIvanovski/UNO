@@ -152,3 +152,5 @@ w
 G.idea/sonarlint/issuestore/e/1/e148e6abdde72b0b55217c5c69c88fb636742a45,9\b\9ba76f5d8e2fdc54fb7c0c1c84680088b97b595c
 Å
 Q.idea/sonarlint/securityhotspotstore/e/1/e148e6abdde72b0b55217c5c69c88fb636742a45,a\e\aee3538a9ee1232768102f0000da36cbaf032c1a
+;
+src/card.py,1\f\1fc99a46e2ac6016e5b56faf002027cd59e210ea
