@@ -1,6 +1,7 @@
 import socket
 import threading
 
+from core.game_controller import GameController
 from logger import logger
 
 
@@ -19,6 +20,7 @@ def get_free_port():
 class Server:
     def __init__(self, max_clients=3, nickname=None):
         self.nickname = nickname
+        self.game_controller = None
         self.host = get_local_ip()
         self.port = get_free_port()
         self.session_code = str(self.port)
@@ -33,6 +35,11 @@ class Server:
 
         self.broadcast_thread = threading.Thread(target=self.broadcast_session_code, daemon=True)
         self.broadcast_thread.start()
+
+    def start_game(self):
+        all_nicknames = list(self.clients.keys())  # self.nickname + ...
+        self.game_controller = GameController(is_server=True, server=self)
+        self.game_controller.start_game(all_nicknames)
 
     def broadcast_session_code(self):
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

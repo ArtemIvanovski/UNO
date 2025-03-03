@@ -3,7 +3,9 @@ import random
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QPalette, QBrush, QColor, QTransform, QPen
-from PyQt5.QtWidgets import QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QPushButton
+from PyQt5.QtSvg import QGraphicsSvgItem
+from PyQt5.QtWidgets import QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QPushButton, \
+    QGraphicsSceneMouseEvent
 
 from GUI.draggable_svg_item import DraggableCardItem
 from core.card import Card
@@ -14,6 +16,8 @@ from logger import logger
 class GameWindow(QWidget):
     def __init__(self, num_players, is_client=True):
         super().__init__()
+        self.my_move = None
+        self.draw_card_btn = None
         self.num_players = num_players
 
         self.setWindowTitle("UNO")
@@ -70,14 +74,40 @@ class GameWindow(QWidget):
         self.add_buttons()
 
     def add_buttons(self):
-        """Кнопки для теста анимаций."""
-        self.draw_card_btn = QPushButton("Взять карту", self)
-        self.draw_card_btn.setGeometry(50, 650, 120, 40)
-        self.draw_card_btn.clicked.connect(lambda: self.animate_draw_card(3, None))
+        """Добавляет кнопку 'Взять карту' в виде SVG."""
+        self.draw_card_btn = QGraphicsSvgItem(get_resource_path("assets/iconTakeCard.svg"))
+        self.draw_card_btn.setScale(0.4)  # Уменьшаем картинку кнопки
+        self.draw_card_btn.setPos(250, 500)  # Размещение кнопки
 
-        self.opponent_move_btn = QPushButton("Ход соперника", self)
-        self.opponent_move_btn.setGeometry(200, 650, 150, 40)
-        self.opponent_move_btn.clicked.connect(lambda: self.animate_opponent_move(1, None))
+        self.scene.addItem(self.draw_card_btn)
+
+        # Флаг хода игрока
+        self.my_move = False  # Изначально нельзя нажать кнопку
+
+        # Добавляем обработку кликов
+        self.draw_card_btn.mousePressEvent = self.on_draw_card_click
+        self.update_button_state()  # Обновляем доступность кнопки
+
+    def on_draw_card_click(self, event: QGraphicsSceneMouseEvent):
+        """Обработчик клика по кнопке 'Взять карту'."""
+        if not self.my_move:
+            return  # Игрок не может брать карту, если не его ход
+
+        # Визуальный эффект нажатия (слегка уменьшим прозрачность)
+        self.draw_card_btn.setOpacity(0.6)
+
+        # Запускаем анимацию взятия карты (номер игрока 0 — это основной игрок)
+        self.take_card(0, None)
+
+        # После нажатия убираем эффект
+        self.draw_card_btn.setOpacity(1.0)
+
+    def update_button_state(self):
+        """Обновляет состояние кнопки в зависимости от флага хода игрока."""
+        if self.my_move:
+            self.draw_card_btn.setOpacity(1.0)  # Полностью видна
+        else:
+            self.draw_card_btn.setOpacity(0.3)  # Полупрозрачная, нельзя нажать
 
     def deal_initial_cards(self):
         colors = ["red", "blue", "yellow", "green"]
@@ -190,7 +220,7 @@ class GameWindow(QWidget):
         self.player_hands[player_index] = new_hand
         self.update_player_hand(player_index)
 
-    def animate_draw_card(self, player_index, card):
+    def take_card(self, player_index, card):
         """
         Анимация: карта из колоды -> рука player_index
         Если card=None, генерим новую (если player=0, открытая).
@@ -212,7 +242,6 @@ class GameWindow(QWidget):
 
         def on_finish():
             self.scene.removeItem(deck_item)
-            # Добавляем карту в руку
             self.player_hands[player_index].append((card, None))
             self.update_player_hand(player_index)
 
@@ -224,7 +253,7 @@ class GameWindow(QWidget):
             deck_item.setPos(850, 350)
             if player_index == 3:
                 deck_item.setPos(720, 350)
-        deck_item.fly_to_position(cfg["cx"], cfg["cy"], 3000, callback=on_finish)
+        deck_item.fly_to_position(cfg["cx"], cfg["cy"], 1000, callback=on_finish)
 
     def animate_opponent_move(self, player_index, card):
         if len(self.player_hands[player_index]) == 0 and not card:

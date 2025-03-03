@@ -16,16 +16,15 @@ class Deck:
 
         deck = []
 
-        # Обычные и бонусные карты (по 2 штуки на цвет, кроме 0)
         for color in colors:
-            deck.append(Card(color, "0"))  # 0 только в одном экземпляре
+            deck.append(Card(color, "0"))
             for value in values[1:]:
                 deck.append(Card(color, value))
-                deck.append(Card(color, value))  # Две копии
+                deck.append(Card(color, value))
 
             for action in action_cards:
                 deck.append(Card(color, action, action))
-                deck.append(Card(color, action, action))  # Две копии
+                deck.append(Card(color, action, action))
 
         # Wild-карты (по 4 каждого типа)
         for _ in range(4):

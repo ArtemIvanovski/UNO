@@ -9,16 +9,14 @@ class DraggableCardItem(QGraphicsSvgItem):
         super().__init__(svg_path, parent)
 
         self.draggable = draggable
-        self.card = card  # Объект Card или None
+        self.card = card
         self.card_is_played = False
         self.card_dropped_in_center = None
         self.compare_cards = None
 
-        # Если карта draggable, разрешаем hover, иначе нет
         self.setAcceptHoverEvents(self.draggable)
         self.setFlags(self.ItemIsSelectable | self.ItemIsFocusable)
 
-        # Прямоугольник "центра", куда можно положить карту
         self.center_rect = QRectF(700, 250, 300, 300)
 
         self.old_pos = None

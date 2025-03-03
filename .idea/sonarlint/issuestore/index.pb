@@ -168,3 +168,7 @@ I
 core/__init__.py,c\e\ce4f796c5be8947b7ba7705fab2b891600f264e5
 ?
 assets/icon.svg,7\5\755ce00852c44728119bb2e2e0cb043ed73919af
+G
+core/game_controller.py,a\6\a6b1420736600c3c83add60c5e4ad95e0af0eaf0
+G
+assets/iconTakeCard.svg,3\d\3d2dca71a5704ef4be593471883abf02ec13dd57
