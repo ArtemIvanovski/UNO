@@ -72,12 +72,8 @@ H
 assets/cards/green/3.svg,d\a\da62d4b8a1a1130a6e4ff1e8486fe657b4dec825
 H
 assets/cards/green/4.svg,2\2\22f63b5fdbc6ca91ae7a6b85f7075be6f67b1cc9
-w
-G.idea/sonarlint/issuestore/1/3/13cce7fd076299c81b4986166f3d822791c9490e,5\b\5b225615d6a69af8e1321c7eaabb744653b8f833
 H
 assets/cards/green/5.svg,5\a\5ace68d6f56db3bf377ed18dfbd9c7773a462e36
-\
-,.idea/inspectionProfiles/Project_Default.xml,4\9\496a238a6afa168dbaf6efd37bb459331589579c
 H
 assets/cards/green/6.svg,2\3\233a671aa701770e550c5225b9d3b490af656c8d
 H
@@ -88,20 +84,12 @@ H
 assets/cards/green/9.svg,4\e\4e0019a5afa37f09e2ca7f4eec986f604b488cee
 K
 assets/cards/green/skip.svg,6\e\6e05272ea314927759c0aa5ef4b49953e6c51b82
-^
-..idea/inspectionProfiles/profiles_settings.xml,1\e\1e9075f5bf079c01ef2c910709e91a497d262080
 N
 assets/cards/green/reverse.svg,3\b\3bb73972839469b57d5c80c7ad8dc6467d1eb838
 O
 assets/cards/green/draw-two.svg,d\4\d4bc2d793df30ef463198d9c51d37ab70e1a4627
-Å
-Q.idea/sonarlint/securityhotspotstore/1/3/13cce7fd076299c81b4986166f3d822791c9490e,9\f\9f958528e4eb130c807f923fbbf706355a6bf465
 ?
 GUI/__init__.py,1\e\1eab3eb841e3d3f2c3050353dcbc69b91e7a5725
-w
-G.idea/sonarlint/issuestore/1/9/19359a61ae2446b51b549167b014da2fcf265768,b\f\bf26e38c6077dc99b98bdb7696e470de283480be
-Å
-Q.idea/sonarlint/securityhotspotstore/1/9/19359a61ae2446b51b549167b014da2fcf265768,e\2\e2212f35b63a1f1addcdc9ab55a8fc987a93a069
 I
 assets/cards/yellow/0.svg,4\6\46782cd7ac3f7d90c08b4dd782bf8e5bde6367b2
 I
@@ -162,8 +150,6 @@ J
 assets/cards/back/back.svg,f\f\ff5710ab5a272639cf7293316eb16ac84496e563
 I
 GUI/draggable_svg_item.py,e\d\ed2b255da340af6110b86d620ad150ab77b6d7c0
-7
-main.py,f\1\f1bdda93d9a278e358509d498e17d97764c1fb29
 @
 core/__init__.py,c\e\ce4f796c5be8947b7ba7705fab2b891600f264e5
 ?

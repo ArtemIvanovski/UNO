@@ -16,7 +16,7 @@ from logger import logger
 class GameWindow(QWidget):
     def __init__(self, num_players, is_client=True):
         super().__init__()
-        self.my_move = None
+        self.take_card_button = None
         self.draw_card_btn = None
         self.num_players = num_players
 
@@ -82,7 +82,7 @@ class GameWindow(QWidget):
         self.scene.addItem(self.draw_card_btn)
 
         # Флаг хода игрока
-        self.my_move = False  # Изначально нельзя нажать кнопку
+        self.take_card_button = True  # Изначально нельзя нажать кнопку
 
         # Добавляем обработку кликов
         self.draw_card_btn.mousePressEvent = self.on_draw_card_click
@@ -90,7 +90,7 @@ class GameWindow(QWidget):
 
     def on_draw_card_click(self, event: QGraphicsSceneMouseEvent):
         """Обработчик клика по кнопке 'Взять карту'."""
-        if not self.my_move:
+        if not self.take_card_button:
             return  # Игрок не может брать карту, если не его ход
 
         # Визуальный эффект нажатия (слегка уменьшим прозрачность)
@@ -98,13 +98,16 @@ class GameWindow(QWidget):
 
         # Запускаем анимацию взятия карты (номер игрока 0 — это основной игрок)
         self.take_card(0, None)
+        self.animate_opponent_move(1, None)
 
         # После нажатия убираем эффект
         self.draw_card_btn.setOpacity(1.0)
+        # self.take_card_button = False
+        self.update_button_state()
 
     def update_button_state(self):
         """Обновляет состояние кнопки в зависимости от флага хода игрока."""
-        if self.my_move:
+        if self.take_card_button:
             self.draw_card_btn.setOpacity(1.0)  # Полностью видна
         else:
             self.draw_card_btn.setOpacity(0.3)  # Полупрозрачная, нельзя нажать
