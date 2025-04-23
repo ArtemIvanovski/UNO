@@ -33,7 +33,6 @@ class RulesWindow(QMainWindow):
     def load_html(self, file_name):
         base_dir = os.path.dirname('assets')
         file_path = os.path.join('assets', file_name)
-        print(file_path)
         try:
             with open(get_resource_path(file_path), 'r', encoding='utf-8') as file:
                 html_content = file.read()

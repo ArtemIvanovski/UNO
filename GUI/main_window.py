@@ -3,7 +3,6 @@ from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import QWidget, QPushButton, QHBoxLayout, QLabel, QVBoxLayout
 
 from GUI.create_game_window import CreateGameWindow
-from GUI.game_window import GameWindow
 from GUI.join_game_window import JoinGameWindow
 from GUI.rules_window import RulesWindow
 from core.setting_deploy import get_resource_path
@@ -72,18 +71,16 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
     def show_rules(self):
-        self.game_window = GameWindow(4)
-        self.game_window.show()
-        # logger.info("Открытие окна с правилами игры")
-        # self.rules_window = RulesWindow()
-        # self.rules_window.show()
+        logger.info("Открытие окна с правилами игры")
+        self.rules_window = RulesWindow()
+        self.rules_window.show()
 
     def create_game(self):
         logger.info("Создание новой игры")
-        self.create_game_window = CreateGameWindow()
+        self.create_game_window = CreateGameWindow(self)
         self.create_game_window.show()
 
     def join_game(self):
         logger.info("Присоединение к игре")
-        self.join_game_window = JoinGameWindow()
+        self.join_game_window = JoinGameWindow(self)
         self.join_game_window.show()

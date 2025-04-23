@@ -1,21 +1,33 @@
+from __future__ import annotations
+
 import math
 import random
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QPalette, QBrush, QColor, QTransform, QPen
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QIcon, QPalette, QBrush, QColor, QTransform
 from PyQt5.QtSvg import QGraphicsSvgItem
-from PyQt5.QtWidgets import QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QPushButton, \
-    QGraphicsSceneMouseEvent
+from PyQt5.QtWidgets import QGraphicsEllipseItem
+from PyQt5.QtWidgets import QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsSceneMouseEvent, \
+    QMessageBox, QGraphicsTextItem
 
 from GUI.draggable_svg_item import DraggableCardItem
+from GUI.stat_pos import get_name_positions, get_arc_config, get_color_map
 from core.card import Card
+from core.game_controller import GameController
 from core.setting_deploy import get_resource_path
 from logger import logger
 
 
 class GameWindow(QWidget):
-    def __init__(self, num_players, is_client=True):
+    def __init__(self, num_players, ctrl: GameController = None, main_window=None):
         super().__init__()
+        self._pending_card: Card | None = None
+        self.color_map = get_color_map()
+        self.click_blocker = None
+        self.ctrl = ctrl
+        self.main_window = main_window
+        self.main_window.hide()
+        self.turn_order = []
         self.take_card_button = None
         self.draw_card_btn = None
         self.num_players = num_players
@@ -35,115 +47,118 @@ class GameWindow(QWidget):
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setStyleSheet("background: transparent; border: none;")
+        self.name_items = {}
 
-        self.arc_config = {
-            0: {"cx": 750, "cy": 2100, "r": 1500, "start_angle": 260, "end_angle": 280},
-            1: {"cx": 750, "cy": -1350, "r": 1500, "start_angle": 75, "end_angle": 95},
-            2: {"cx": 2850, "cy": 400, "r": 1500, "start_angle": -5, "end_angle": 5},
-            3: {"cx": -1350, "cy": 400, "r": 1500, "start_angle": -180, "end_angle": -190},
-        }
+        self.name_positions = get_name_positions()
 
+        self.arc_config = get_arc_config()
         self.top_card_item = None
         self.deck_items = []
-
+        self.create_click_blocker()
         self.init_ui()
-        self.deal_initial_cards()
 
     def init_ui(self):
-        # Фон
         palette = QPalette()
         palette.setBrush(QPalette.Background, QBrush(QColor(173, 216, 230)))
         self.setPalette(palette)
 
-        # Красный прямоугольник для стола
-        center_item = QGraphicsRectItem(700, 250, 300, 300)
-        center_item.setPen(QPen(Qt.red, 3))
-        self.scene.addItem(center_item)
-
-        # Создаем "верхнюю карту" по умолчанию
-        self.create_top_card("red", "7")
-
-        # Создаем колоду (5 карт рубашкой)
-        for i in range(5):
+        for i in range(108 - self.num_players * 7 - 1):
             deck = DraggableCardItem(get_resource_path("assets/cards/back.svg"), draggable=False)
             deck.setScale(0.5)
-            deck.setPos(600 + i * 3, 300 - i * 3)
+            deck.setPos(600 + i * 0.1, 300 - i * 0.1)
             self.deck_items.append(deck)
             self.scene.addItem(deck)
 
         self.add_buttons()
+        self._init_color_indicator()
+        self._init_color_picker()
+
+    def _init_color_indicator(self):
+        r = 15
+        x, y = 950, 280
+        self.color_indicator = QGraphicsEllipseItem(x, y, r * 2, r * 2)
+        self.color_indicator.setBrush(QBrush(Qt.transparent))
+        self.color_indicator.setZValue(10001)
+        self.scene.addItem(self.color_indicator)
+
+    def set_color_indicator(self, color_name: str | None):
+        if color_name and color_name in self.color_map:
+            hexcol = self.color_map[color_name]
+            self.color_indicator.setBrush(QBrush(QColor(hexcol)))
+            self.color_indicator.setVisible(True)
+        else:
+            self.color_indicator.setVisible(False)
+
+    def _init_color_picker(self):
+        self.color_picker = []
+        r = 25
+        base_x, base_y = 790, 550
+        gap = 70
+        for i, (name, hexcol) in enumerate(self.color_map.items()):
+            circle = QGraphicsEllipseItem(
+                base_x + (i - (len(self.color_map) - 1) / 2) * gap - r,
+                base_y - r,
+                r * 2, r * 2
+            )
+            circle.setBrush(QBrush(QColor(hexcol)))
+            circle.setZValue(10002)
+            circle.setVisible(False)
+            circle._color_name = name
+            circle.mousePressEvent = lambda evt, item=circle: self._on_color_chosen(item._color_name)
+            self.scene.addItem(circle)
+            self.color_picker.append(circle)
+
+    def show_color_picker(self):
+        for c in self.color_picker:
+            c.setVisible(True)
+
+    def hide_color_picker(self):
+        for c in self.color_picker:
+            c.setVisible(False)
 
     def add_buttons(self):
-        """Добавляет кнопку 'Взять карту' в виде SVG."""
         self.draw_card_btn = QGraphicsSvgItem(get_resource_path("assets/iconTakeCard.svg"))
-        self.draw_card_btn.setScale(0.4)  # Уменьшаем картинку кнопки
-        self.draw_card_btn.setPos(250, 500)  # Размещение кнопки
-
+        self.draw_card_btn.setScale(0.4)
+        self.draw_card_btn.setPos(250, 500)
         self.scene.addItem(self.draw_card_btn)
-
-        # Флаг хода игрока
-        self.take_card_button = True  # Изначально нельзя нажать кнопку
-
-        # Добавляем обработку кликов
+        self.take_card_button = True
         self.draw_card_btn.mousePressEvent = self.on_draw_card_click
-        self.update_button_state()  # Обновляем доступность кнопки
+        self.update_button_state()
 
     def on_draw_card_click(self, event: QGraphicsSceneMouseEvent):
-        """Обработчик клика по кнопке 'Взять карту'."""
-        if not self.take_card_button:
-            return  # Игрок не может брать карту, если не его ход
-
-        # Визуальный эффект нажатия (слегка уменьшим прозрачность)
         self.draw_card_btn.setOpacity(0.6)
-
-        # Запускаем анимацию взятия карты (номер игрока 0 — это основной игрок)
-        self.take_card(0, None)
-        self.animate_opponent_move(1, None)
-
-        # После нажатия убираем эффект
+        take_card = self.ctrl.draw_one()
+        self.take_card(0, take_card)
         self.draw_card_btn.setOpacity(1.0)
-        # self.take_card_button = False
         self.update_button_state()
 
     def update_button_state(self):
-        """Обновляет состояние кнопки в зависимости от флага хода игрока."""
         if self.take_card_button:
-            self.draw_card_btn.setOpacity(1.0)  # Полностью видна
+            self.draw_card_btn.setAcceptedMouseButtons(Qt.LeftButton)
+            self.draw_card_btn.setOpacity(1.0)
         else:
-            self.draw_card_btn.setOpacity(0.3)  # Полупрозрачная, нельзя нажать
+            self.draw_card_btn.setAcceptedMouseButtons(Qt.NoButton)
+            self.draw_card_btn.setOpacity(0.3)
 
-    def deal_initial_cards(self):
-        colors = ["red", "blue", "yellow", "green"]
-        values = [str(i) for i in range(10)] + ["draw two", "reverse", "skip"]
-
-        for player in range(self.num_players):
-            for _ in range(7):
-                if player == 0:
-                    c = Card(random.choice(colors), random.choice(values))
-                else:
-                    c = Card("back", "back")
-                self.player_hands[player].append((c, None))
-            self.update_player_hand(player)
-
-    def create_top_card(self, color, value):
-        """Удаляем старую верхнюю карту, создаём новую."""
+    def create_top_card(self, card: Card):
         if self.top_card_item:
             self.scene.removeItem(self.top_card_item)
+        if card.action not in ["draw four", "wild"]:
+            self.set_color_indicator(None)
+        else:
+            self.set_color_indicator(card.color)
 
-        c = Card(color, value)
-        new_top = DraggableCardItem(c.image_path,
-                                    draggable=False, card=c)
+        new_top = DraggableCardItem(card.image_path,
+                                    draggable=False, card=card)
         new_top.setScale(0.5)
         new_top.setPos(800, 300)
         new_top.setZValue(9999)
         self.scene.addItem(new_top)
 
         self.top_card_item = new_top
-        logger.info(f"Новая верхняя карта: {color} {value}")
+        logger.info(f"Новая верхняя карта: {card}")
 
     def update_player_hand(self, player_index):
-        """Перерисовываем веер."""
-        # Удаляем старые item
         for (card, item) in self.player_hands[player_index]:
             if item:
                 self.scene.removeItem(item)
@@ -181,11 +196,16 @@ class GameWindow(QWidget):
             x = cx - r * math.cos(a)
             y = cy - r * math.sin(a)
 
+        can_drag = (
+                player_index == 0 and
+                c.color != "back" and
+                self.ctrl.is_my_step
+        )
+
         item = DraggableCardItem(c.image_path,
-                                 draggable=(player_index == 0 and c.color != "back"), card=c)
+                                 draggable=can_drag, card=c)
         item.setScale(0.5)
 
-        # Повернем карту
         t = QTransform()
         if player_index in [0, 1]:
             t.rotate(angle_deg + 90)
@@ -193,16 +213,23 @@ class GameWindow(QWidget):
             t.rotate(angle_deg - 90)
         item.setTransform(t)
 
-        # Логика хода для нижнего игрока
         if player_index == 0 and c.color != "back":
             def dropped():
                 self.remove_card_from_player(0, c)
-                self.create_top_card(c.color, c.value)
+                self.create_top_card(c)
                 self.update_player_hand(0)
+
+                if c.action in ("draw four", "wild"):
+                    self._pending_card = c
+                    self.show_color_picker()
+                else:
+                    self.ctrl.play_card(card=c)
+                    self.update()
 
             item.card_dropped_in_center = dropped
 
             def compare_cards(card_obj):
+                logger.info(f"compare_cards {self.top_card_item.card.can_play_on(card_obj)}")
                 return self.top_card_item.card.can_play_on(card_obj)
 
             item.compare_cards = compare_cards
@@ -224,24 +251,14 @@ class GameWindow(QWidget):
         self.update_player_hand(player_index)
 
     def take_card(self, player_index, card):
-        """
-        Анимация: карта из колоды -> рука player_index
-        Если card=None, генерим новую (если player=0, открытая).
-        """
         if not self.deck_items:
             return
 
         deck_item = self.deck_items.pop()
         deck_item.setZValue(500)
 
-        if card is None:
-            # Генерим
-            if player_index == 0:
-                colors = ["red", "blue", "yellow", "green"]
-                values = [str(i) for i in range(10)] + ["draw two", "reverse", "skip"]
-                card = Card(random.choice(colors), random.choice(values))
-            else:
-                card = Card("back", "back")
+        if card is None and player_index != 0:
+            card = Card("back", "back")
 
         def on_finish():
             self.scene.removeItem(deck_item)
@@ -261,6 +278,9 @@ class GameWindow(QWidget):
     def animate_opponent_move(self, player_index, card):
         if len(self.player_hands[player_index]) == 0 and not card:
             return
+
+        if self.player_hands[player_index]:
+            self.player_hands[player_index].pop(0)
 
         if card is None:
             (c, item) = self.player_hands[player_index][0]
@@ -286,7 +306,133 @@ class GameWindow(QWidget):
 
         def on_finish():
             self.scene.removeItem(item)
-            self.create_top_card(c.color, c.value)
+            self.create_top_card(c)
             self.update_player_hand(player_index)
 
         item.fly_to_position(800, 300, 500, callback=on_finish)
+
+    def apply_state(self, command: str):
+        logger.info(f"Обработка команды {command}")
+        if command == "start_game":
+            self.create_top_card(self.ctrl.top_card)
+
+            self.player_hands = {i: [] for i in range(self.num_players)}
+
+            for idx in range(self.num_players):
+                if idx == 0:
+                    cards = list(self.ctrl.my_hands)
+                else:
+                    cards = [Card("back", "back") for _ in range(7)]
+
+                self.player_hands[idx] = [(c, None) for c in cards]
+                self.update_player_hand(idx)
+
+        elif command == "step" or command == "wild":
+            self.animate_opponent_move(self.swap_queue().index(self.ctrl.step_player), self.ctrl.top_card)
+            self.create_top_card(self.ctrl.top_card)
+        elif command == "take_card":
+            self.take_card(self.swap_queue().index(self.ctrl.player_take_card), None)
+        elif command == "draw two":
+            self.animate_opponent_move(self.swap_queue().index(self.ctrl.step_player), self.ctrl.top_card)
+            self.create_top_card(self.ctrl.top_card)
+            self._draw_cards(count=2)
+        elif command == "draw four":
+            self.animate_opponent_move(self.swap_queue().index(self.ctrl.step_player), self.ctrl.top_card)
+            self.create_top_card(self.ctrl.top_card)
+            self._draw_cards(count=4)
+        elif command == "end_game":
+            msgbox = QMessageBox(self)
+            msgbox.setWindowTitle("Игра окончена")
+            msgbox.setText(f"Победил игрок: {self.ctrl.winner_player}")
+            msgbox.setIcon(QMessageBox.Information)
+            msgbox.setStandardButtons(QMessageBox.Ok)
+
+            ret = msgbox.exec_()
+
+            if ret == QMessageBox.Ok:
+                if self.main_window is not None:
+                    self.main_window.show()
+                self.ctrl.close_game()
+                self.close()
+        elif command == "error":
+            if self.ctrl.is_client:
+                text = "Соединение с сервером потеряно."
+            else:
+                text = f"Игрок {self.ctrl.exit_nickname} отключился — игра прервана."
+            QMessageBox.critical(self, "Ошибка", text)
+            if self.main_window:
+                self.main_window.show()
+            self.ctrl.close_game()
+            self.close()
+        self.update()
+
+    def swap_queue(self):
+        full_queue = self.ctrl.queue[:]
+        if self.ctrl.my_nickname in full_queue:
+            start = full_queue.index(self.ctrl.my_nickname)
+            display_queue = full_queue[start:] + full_queue[:start]
+        else:
+            display_queue = full_queue
+        return display_queue
+
+    def update(self):
+        for idx, items in self.name_items.items():
+            self.scene.removeItem(items)
+        self.name_items.clear()
+
+        display_queue = self.swap_queue()
+        self.ctrl.is_my_step = self.ctrl.current == self.ctrl.my_nickname
+        self.click_blocker.setVisible(not self.ctrl.is_my_step)
+        logger.info(f"Кто ходит {self.ctrl.current}")
+        logger.info(f"колво карт в деке {len(self.ctrl.deck)}")
+        for i in range(self.ctrl.value_player):
+            self.update_player_hand(i)
+        self.take_card_button = self.ctrl.is_my_step
+        self.update_button_state()
+
+        for idx, nick in enumerate(display_queue):
+            if idx >= self.num_players:
+                break
+            x, y, angle = self.name_positions[idx]
+            text = QGraphicsTextItem(nick)
+            text.setPos(x, y)
+            text.setRotation(angle)
+            if nick == self.ctrl.current:
+                text.setDefaultTextColor(Qt.red)
+            else:
+                text.setDefaultTextColor(Qt.black)
+            self.scene.addItem(text)
+            self.name_items[idx] = text
+
+    def create_click_blocker(self):
+        self.click_blocker = QGraphicsRectItem(self.scene.sceneRect())
+        self.click_blocker.setBrush(QBrush(QColor(0, 0, 0, 0)))
+        self.click_blocker.setZValue(10000)
+        self.click_blocker.setAcceptHoverEvents(True)
+        self.click_blocker.setAcceptedMouseButtons(Qt.AllButtons)
+        self.click_blocker.mousePressEvent = lambda event: None
+        self.click_blocker.mouseReleaseEvent = lambda event: None
+        self.click_blocker.mouseMoveEvent = lambda event: None
+        self.click_blocker.setVisible(False)
+        self.scene.addItem(self.click_blocker)
+
+    def _draw_cards(self, count: int = 1):
+        def _draw_one(i):
+            if i >= count:
+                return
+            card = self.ctrl.draw_one()
+            self.take_card(0, card)
+            QTimer.singleShot(300, lambda: _draw_one(i + 1))
+
+        _draw_one(0)
+
+    def _on_color_chosen(self, color_name: str):
+        if not self._pending_card:
+            return
+        self._pending_card.color = color_name
+        self.set_color_indicator(color_name)
+        self.create_top_card(self._pending_card)
+        self.hide_color_picker()
+        self.ctrl.play_card(card=self._pending_card)
+        self._pending_card = None
+        self.update()

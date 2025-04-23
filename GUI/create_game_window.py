@@ -4,14 +4,17 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QListWidget
 
+from GUI.game_window import GameWindow
+from GUI.stat_pos import get_nicknames
 from core.server import Server
-from core.setting_deploy import get_resource_path, get_nicknames
+from core.setting_deploy import get_resource_path
 
 
 class CreateGameWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.server = None
+        self.main_window = parent
         self.setWindowTitle("UNO")
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setWindowIcon(QIcon(get_resource_path("assets/icon.svg")))
@@ -66,6 +69,7 @@ class CreateGameWindow(QDialog):
         self.start_game_button.setStyleSheet(
             "background-color: #28a745; color: white; font-size: 18px; font-weight: bold; padding: 10px; border-radius: 5px;")
         self.start_game_button.setVisible(False)
+        self.start_game_button.clicked.connect(self.on_start_game)
         layout.addWidget(self.start_game_button)
 
         self.setLayout(layout)
@@ -82,7 +86,7 @@ class CreateGameWindow(QDialog):
             self.players_combo.setDisabled(True)
 
     def start_server(self):
-        self.server = Server(max_clients=int(self.players_combo.currentText()) - 1,
+        self.server = Server(value_players=int(self.players_combo.currentText()) - 1,
                              nickname=self.nickname_combo.currentText())
         self.code_label.setText(f"Код доступа: {self.server.session_code}")
         self.code_label.setVisible(True)
@@ -97,8 +101,9 @@ class CreateGameWindow(QDialog):
             self.players_list.clear()
             for nickname in self.server.clients.keys():
                 self.players_list.addItem(nickname)
-            if len(self.server.clients) == self.server.max_clients:
+            if len(self.server.clients) == self.server.value_players:
                 self.start_game_button.setVisible(True)
+
             else:
                 self.start_game_button.setVisible(False)
             threading.Event().wait(2)
@@ -106,3 +111,10 @@ class CreateGameWindow(QDialog):
     def closeEvent(self, event):
         if self.server:
             self.server.shutdown(None, None)
+
+    def on_start_game(self):
+        self.server.gui = GameWindow(num_players=self.server.value_players + 1, main_window=self.main_window)
+        self.server.gui.show()
+        self.server.gui.ctrl = self.server.ctrl
+        self.server.ctrl.new_game([self.server.nickname, *self.server.clients])
+        self.accept()

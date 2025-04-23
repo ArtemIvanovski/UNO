@@ -2,13 +2,16 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QLineEdit
 
+from GUI.game_window import GameWindow
+from GUI.stat_pos import get_nicknames
 from core.client import Client
-from core.setting_deploy import get_resource_path, get_nicknames
+from core.setting_deploy import get_resource_path
 
 
 class JoinGameWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.main_window = parent
         self.setWindowTitle("UNO")
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setWindowIcon(QIcon(get_resource_path("assets/icon.svg")))
@@ -94,3 +97,11 @@ class JoinGameWindow(QDialog):
         self.status_label.setText(message)
         self.status_label.setStyleSheet("font-size: 18px; color: blue; font-weight: bold;")
         self.status_label.setVisible(True)
+
+    def start_game(self, players_number: int):
+        self.client.gui = GameWindow(num_players=players_number, main_window=self.main_window)
+        self.client.gui.ctrl = self.client.ctrl
+        self.client.gui.apply_state("start_game")
+        self.client.gui.show()
+        self.accept()
+

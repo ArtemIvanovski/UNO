@@ -158,3 +158,25 @@ G
 core/game_controller.py,a\6\a6b1420736600c3c83add60c5e4ad95e0af0eaf0
 G
 assets/iconTakeCard.svg,3\d\3d2dca71a5704ef4be593471883abf02ec13dd57
+@
+core/protocol.py,b\d\bdd21112c81a8553865958a43d6b5b064d9c01a7
+E
+core/network_utils.py,7\9\79f5ea178098b363c01a0764dad59f626ad8386d
+?
+GUI/stat_pos.py,b\a\ba9c303a894f4e6930c66a55e6354b48955fcb9d
+J
+assets/cards/blue/wild.svg,8\0\80cacc2612ed2adbfcfc4a6cad6df6b7ea8eb53d
+K
+assets/cards/green/wild.svg,7\3\735ff2f94cd3d4c4e72d2c0d2115d8e31e01b132
+I
+assets/cards/red/wild.svg,7\0\70c5cde13cf82a521c507f1cbb88c61a815937a8
+L
+assets/cards/yellow/wild.svg,4\f\4f3ef01eac5d871d0633e2ff9ef4489cced4d070
+O
+assets/cards/blue/draw-four.svg,e\5\e5fa22ff6f002d306d4c3f7881f28094820ce46a
+P
+ assets/cards/green/draw-four.svg,1\0\10ab31333bf958ba151531ff0c112db0aec68222
+N
+assets/cards/red/draw-four.svg,9\9\99fcfb84840f8c3ae41ef98f7f16e101aa094671
+Q
+!assets/cards/yellow/draw-four.svg,c\7\c7e7b7ee0021dd9db2d1a5196c85fbd55189093f

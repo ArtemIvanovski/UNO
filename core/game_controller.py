@@ -1,110 +1,176 @@
-import json
+from __future__ import annotations
+
+from typing import Callable
 
 from core.deck import Deck
+from core.card import Card
+from core import protocol as proto
+import random
+
 from logger import logger
 
 
 class GameController:
-    def __init__(self, is_server, server=None, client_socket=None):
-        """
-        :param is_server: True/False
-        :param server: объект Server (если is_server=True)
-        :param client_socket: сокет клиента (если is_server=False)
-        """
-        self.is_server = is_server
-        self.server = server
-        self.client_socket = client_socket
-
+    def __init__(self,
+                 value_player: int,
+                 nickname: str,
+                 is_client: bool = True,
+                 on_send: Callable[[bytes], None] | None = None,
+                 on_close: Callable[[], None] | None = None):
+        self.exit_nickname = None
+        self._send = on_send
+        self._close_net = on_close
+        self.state_ready: Callable[[str], None] | None = None
+        self.player_take_card = None
+        self.winner_player = None
+        self.step_player = None
+        self.nicknames = None
+        self.my_nickname = nickname
+        self.is_client = is_client
+        self.my_hands = {}
+        self.is_my_step = False
         self.deck = Deck()
-        self.top_card = None
-        self.hands = {}  # {nickname: [Card, Card, ...]}
-        self.turn_order = []  # список никнеймов в порядке ходов
-        self.current_player_index = 0
+        self.hands = {}
+        self.queue = []
+        self.top_card = self.deck.pick_start_card()
+        self.current = ""
+        self.value_player = value_player
+        if not self.is_client:
+            self.value_player += 1
 
-    def start_game(self, nicknames):
-        """
-        Запускаем игру: генерируем колоду, раздаём карты, выбираем верхнюю карту стола.
-        """
-        self.deck.shuffle()
-        # Для 2..4 игроков
-        num_players = len(nicknames)
+    def _dispatch(self, cmd: str) -> None:
+        if self.state_ready:
+            self.state_ready(cmd)
 
-        # Раздаём
-        deals = self.deck.deal_cards(num_players)
-        for i, nickname in enumerate(nicknames):
-            self.hands[nickname] = deals[i]
+    def new_game(self, nicknames):
+        random.shuffle(self.deck.cards)
+        self.nicknames = nicknames
+        self.hands = self.deck.deal_cards(nicknames)
 
-        # Тянем первую карту на стол
-        while True:
-            c = self.deck.draw_card()
-            # Если первая карта - НЕ спецкарта? Или разрешаем любую
-            if c:
-                self.top_card = c
-                break
+        self.queue = nicknames[:]
+        random.shuffle(self.queue)
+        self.current = self.queue[0]
+        self.is_my_step = self.my_nickname == self.current
+        msg = proto.start_game(
+            top=self.top_card,
+            queue=self.queue,
+            hands=self.hands,
+            deck=self.deck.cards,
+            nicknames=self.nicknames
+        )
 
-        self.turn_order = nicknames[:]
-        logger.info(f"Старт игры. Верхняя карта: {self.top_card}")
+        self.my_hands = {
+            nickname: [Card.from_dict(c) for c in cards]
+            for nickname, cards in msg.get("players", {}).items()
+        }.get(self.my_nickname, [])
 
-        # Отправляем каждому игроку его карты, а также общую top_card
-        self.broadcast_state()
+        if self._send:
+            self._send(proto.dumps(msg))
 
-    def broadcast_state(self):
-        """
-        Отправляет всем текущее состояние игры:
-         - top_card
-         - игроку – его карты
-         - кто ходит сейчас
-        """
-        if not self.is_server:
-            return  # Только сервер рассылает
+        self._dispatch("start_game")
 
-        import json
-        for nickname, sock in self.server.clients.items():
-            # Формируем сообщение
-            data = {
-                "type": "game_state",
-                "top_card": {"color": self.top_card.color, "value": self.top_card.value},
-                "your_cards": [c.__dict__ for c in self.hands[nickname]],
-                "current_player": self.turn_order[self.current_player_index]
-            }
-            msg = json.dumps(data)
-            sock.send(msg.encode("utf-8"))
+    def play_card(self, card: Card):
+        if card in self.my_hands:
+            self.my_hands.remove(card)
+        self.top_card = card
 
-    def handle_play_card(self, nickname, card_info):
-        """
-        Сервер: игрок nickname сыграл карту card_info.
-        Убираем из руки, делаем её top_card, рассылаем state
-        """
-        # Находим Card в self.hands[nickname], убираем
-        from core.card import Card
-        played_card = Card(card_info["color"], card_info["value"], card_info["action"])
-        if played_card in self.hands[nickname]:
-            self.hands[nickname].remove(played_card)
-            self.top_card = played_card
+        if card.action == "reverse":
+            if len(self.queue) == 2:
+                self.current = self.my_nickname
+            else:
+                self.queue.reverse()
+                self.current = self._next_player()
+        elif card.action == "skip":
+            self.current = self._next_player()
+            self.current = self._next_player()
+        else:
+            self.current = self._next_player()
 
-            # Следующий ход
-            self.current_player_index = (self.current_player_index + 1) % len(self.turn_order)
+        if self._send:
+            self._send(proto.dumps(proto.step(self.my_nickname, card, self.current)))
+        if len(self.my_hands) == 0:
+            self.win()
 
-            self.broadcast_state()
+    def win(self):
+        if self._send:
+            self._send(proto.dumps(proto.end_game(self.my_nickname)))
+        self.end_game(proto.end_game(self.my_nickname))
 
-    def handle_draw_card(self, nickname):
-        """
-        Игрок взял карту из колоды
-        """
-        c = self.deck.draw_card()
-        self.hands[nickname].append(c)
-        self.broadcast_state()
+    def draw_one(self):
+        card = self.deck.draw_card()
+        self.my_hands.append(card)
+        if self._send:
+            self._send(proto.dumps(proto.take_card(self.my_nickname, card)))
+        return card
 
-    def process_message(self, sock, msg):
-        """
-        Сервер обрабатывает входящие сообщения JSON.
-        """
-        data = json.loads(msg)
-        if data["type"] == "play_card":
-            self.handle_play_card(data["nickname"], data["card"])
-        elif data["type"] == "draw_card":
-            self.handle_draw_card(data["nickname"])
-        # ... прочие типы
+    def _next_player(self):
+        idx = (self.queue.index(self.current) + 1) % len(self.queue)
+        return self.queue[idx]
 
-    # На клиенте тоже можно хранить аналогичный GameController,
-    # где process_message() обновляет локальный GameWindow
+    def handle_command(self, data):
+        if data["command"] == "start_game":
+            self.handle_start_game(data)
+            return self.value_player
+        elif data["command"] == "step":
+            self.handle_step(data)
+        elif data["command"] == "take_card":
+            self.handle_take_card(data)
+        elif data["command"] == "end_game":
+            self.end_game(data)
+
+    def handle_start_game(self, data):
+        self.value_player = data.get("value_numbers")
+        self.queue = data.get("queue_players")
+        self.current = data.get("current_player")
+        self.top_card = Card.from_dict(data.get("top_card"))
+        logger.info(self.my_nickname)
+        self.is_my_step = self.my_nickname == self.current
+        self.deck = Deck()
+        self.deck.cards = [Card.from_dict(c) for c in data.get("deck", [])]
+
+        self.hands = None
+        self.nicknames = data.get("nicknames")
+        self.my_hands = {
+            nickname: [Card.from_dict(c) for c in cards]
+            for nickname, cards in data.get("players", {}).items()
+        }.get(self.my_nickname, [])
+
+    def __str__(self) -> str:
+        return (
+            f"GameController:\n"
+            f"  My Nickname: {self.my_nickname}\n"
+            f"  is_my_step: {self.is_my_step}\n"
+            f"  Value Player: {self.value_player}\n"
+            f"  Current Player: {self.current}\n"
+            f"  Queue: {self.queue}\n"
+            f"  Top Card: {self.top_card}\n"
+            f"  my_hands:\n{self.my_hands}\n"
+            f"  Deck: {len(self.deck.cards)} cards remaining"
+        )
+
+    def handle_step(self, data):
+        self.top_card = Card.from_dict(data.get("top_card"))
+        self.current = data.get("next_player")
+        self.is_my_step = self.my_nickname == self.current
+        self.step_player = data.get("player")
+        result_command = "step" if not self.top_card.action else self.top_card.action
+        self._dispatch(result_command)
+
+    def end_game(self, data):
+        self.winner_player = data.get("winner")
+        self._dispatch("end_game")
+
+    def handle_take_card(self, data):
+        self.player_take_card = data.get("player")
+        card_dict = data["card"]
+        card = Card.from_dict(card_dict)
+        self.deck.pop_card(card)
+        self._dispatch("take_card")
+
+    def close_game(self):
+        if self._close_net:
+            self._close_net()
+
+    def handle_error(self, nickname: str | None = None):
+        self.exit_nickname = nickname
+        self._dispatch("error")

@@ -1,45 +1,55 @@
+import json
 import socket
 import threading
 
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
+
 from core.game_controller import GameController
+from core.network_utils import get_local_ip
 from logger import logger
 
 
-def get_local_ip():
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
+class Server(QObject):
+    gui_cmd = pyqtSignal(str)
 
-
-def get_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
-class Server:
-    def __init__(self, max_clients=3, nickname=None):
+    def __init__(self, value_players=3, nickname=None):
+        super().__init__()
+        self.gui = None
         self.nickname = nickname
-        self.game_controller = None
+        self.game_started = False
+        self.ctrl = GameController(
+            value_player=value_players,
+            nickname=nickname,
+            is_client=False,
+            on_send=self._broadcast,
+            on_close=self.shutdown
+        )
+
+        self.ctrl.state_ready = self.gui_cmd.emit
+        self.gui_cmd.connect(self._apply_state, Qt.QueuedConnection)
+        self.game_started = False
         self.host = get_local_ip()
-        self.port = get_free_port()
+        # self.port = get_free_port()
+        self.port = 8080
         self.session_code = str(self.port)
-        self.max_clients = max_clients
+        self.value_players = value_players
         self.clients = {}
-        self.broadcasting = True  # Флаг для контроля отправки broadcast
+        self.broadcasting = True
 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(self.max_clients)
+        self.server_socket.listen(self.value_players)
         logger.info(f"Сервер запущен на {self.host}:{self.port} с кодом сессии: {self.session_code}")
 
         self.broadcast_thread = threading.Thread(target=self.broadcast_session_code, daemon=True)
         self.broadcast_thread.start()
 
-    def start_game(self):
-        all_nicknames = list(self.clients.keys())  # self.nickname + ...
-        self.game_controller = GameController(is_server=True, server=self)
-        self.game_controller.start_game(all_nicknames)
+    def _broadcast(self, data: bytes):
+        for sock in self.clients.values():
+            try:
+                sock.sendall(data)
+            except OSError:
+                pass
 
     def broadcast_session_code(self):
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -47,7 +57,7 @@ class Server:
         message = f"{self.session_code}:{self.host}:{self.port}"
 
         while True:
-            if len(self.clients) < self.max_clients:  # Отправлять, если не заполнено
+            if len(self.clients) < self.value_players:
                 try:
                     udp_socket.sendto(message.encode(), ("255.255.255.255", self.port))
                     logger.info(f"Отправлен код сессии {self.session_code} по адресу 255.255.255.255:{self.port}")
@@ -67,16 +77,20 @@ class Server:
             self.clients[nickname] = client_socket
             client_socket.send("WELCOME".encode("utf-8"))
 
-            if len(self.clients) == self.max_clients:
+            if len(self.clients) == self.value_players:
                 logger.info("Достигнуто максимальное количество игроков. Остановка broadcast.")
                 self.broadcasting = False
 
             while True:
-                message = client_socket.recv(1024).decode("utf-8")
-                if not message:
+                raw = client_socket.recv(8192)
+                if not raw:
                     break
-                logger.info(f"{nickname} сказал: {message}")
-                self.broadcast(f"{nickname}: {message}", client_socket)
+                try:
+                    data = json.loads(raw.decode("utf-8"))
+                    logger.info(f"Команда {data}")
+                    self.ctrl.handle_command(data)
+                except Exception as e:
+                    logger.error(e)
         except:
             pass
         finally:
@@ -88,9 +102,13 @@ class Server:
         client_socket.close()
         logger.info(f"Клиент {nickname} отключился.")
 
-        if len(self.clients) < self.max_clients:  # Если кто-то вышел, снова включаем broadcast
-            logger.info("Игрок отключился. Возобновление broadcast.")
-            self.broadcasting = True
+        if not self.game_started:
+            if len(self.clients) < self.value_players:
+                logger.info("Игрок отключился. Возобновление broadcast.")
+                self.broadcasting = True
+        else:
+            logger.info("Отключение во время игры — аварийное завершение.")
+            self.ctrl.handle_error(nickname)
 
     def start(self):
         logger.info("Для остановки сервера нажмите CTRL+C")
@@ -100,3 +118,24 @@ class Server:
                 threading.Thread(target=self.handle_client, args=(client_socket, address), daemon=True).start()
             except OSError:
                 break
+
+    def shutdown(self, *_):
+        logger.info("Завершаем сервер...")
+        try:
+            self.server_socket.close()
+        except OSError:
+            pass
+
+        for sock in list(self.clients.values()):
+            try:
+                sock.close()
+            except OSError:
+                pass
+        self.clients.clear()
+
+    def _apply_state(self, cmd: str):
+        if cmd == "start_game":
+            self.game_started = True
+        if not self.gui:
+            return
+        self.gui.apply_state(cmd)

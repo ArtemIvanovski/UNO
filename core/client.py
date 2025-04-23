@@ -1,79 +1,90 @@
+import json
 import socket
 import threading
-import time
+
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
+
+from core.game_controller import GameController
+from core.network_utils import find_server_by_port
 from logger import logger
 
 
-def find_server_by_port(port):
-    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+class Client(QObject):
+    gui_cmd = pyqtSignal(str)
+    gui_requested = pyqtSignal(int)
 
-    try:
-        udp_socket.bind(("", port))  # Слушаем конкретный порт, который совпадает с кодом сессии
-    except OSError as e:
-        logger.error(f"Ошибка при привязке к порту {port}: {e}")
-        return None, None
-
-    logger.info(f"Поиск сервера на порте {port}...")
-    timeout = time.time() + 15  # Ждем 15 секунд
-
-    while time.time() < timeout:
-        try:
-            udp_socket.settimeout(5)
-            data, addr = udp_socket.recvfrom(1024)
-            received_code, ip, server_port = data.decode().split(":")
-            if received_code == str(port):  # Сравниваем с введенным портом
-                logger.info(f"Найден сервер {ip}:{server_port}")
-                return ip, int(server_port)
-        except socket.timeout:
-            logger.info("Не получено данных, повторяем попытку...")
-
-    logger.error("Ошибка: Сервер не найден.")
-    return None, None
-
-
-class Client:
     def __init__(self, session_code, nickname, join_window):
+        super().__init__()
+        self.gui = None
         self.join_window = join_window
-        self.server_ip, self.server_port = find_server_by_port(int(session_code))  # Код сессии - это порт
-        if self.server_ip is None:
-            self.join_window.show_error("Ошибка: сервер не найден!")
-            return
+        self.nickname = nickname
 
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.ctrl = GameController(
+            value_player=0,
+            nickname=nickname,
+            on_send=self._send_to_srv,
+            on_close=self.close
+        )
+
+        self.gui_requested.connect(self.join_window.start_game)
+        self.ctrl.state_ready = self.gui_cmd.emit
+        self.gui_cmd.connect(self._apply_state, Qt.QueuedConnection)
+
+        self.server_ip, self.server_port = find_server_by_port(int(session_code))
+        if not self.server_ip:
+            return self.join_window.show_error("Ошибка: сервер не найден!")
+
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.client_socket.connect((self.server_ip, self.server_port))
+            self.sock.connect((self.server_ip, self.server_port))
             self.join_window.show_status("Подключение установлено...")
-        except:
-            self.join_window.show_error("Ошибка подключения к серверу!")
-            return
+        except Exception:
+            return self.join_window.show_error("Ошибка подключения к серверу!")
 
-        # Отправляем никнейм серверу
         self.send_message(nickname)
-
-        # Получаем ответ от сервера (валидный никнейм или нет)
-        response = self.client_socket.recv(1024).decode("utf-8")
-
-        if response == "INVALID_NICKNAME":
-            self.join_window.show_error("Ошибка: Никнейм уже занят! Выберите другой.")
-            self.close()
-            return
+        resp = self.sock.recv(1024).decode("utf-8")
+        if resp == "INVALID_NICKNAME":
+            return self.join_window.show_error("Никнейм уже занят!")
 
         self.join_window.show_success("Вы успешно подключились! Ожидайте начала игры.")
-        threading.Thread(target=self.receive_messages, daemon=True).start()
 
-    def send_message(self, message):
-        self.client_socket.send(message.encode("utf-8"))
+        threading.Thread(target=self._recv_loop, daemon=True).start()
 
-    def receive_messages(self):
+    def send_message(self, msg: str):
+        self.sock.send(msg.encode("utf-8"))
+
+    def _recv_loop(self):
         while True:
             try:
-                message = self.client_socket.recv(1024).decode("utf-8")
-                self.join_window.show_status(message)
-            except:
-                self.join_window.show_error("Отключение от сервера")
-                self.close()
+                raw = self.sock.recv(8192)
+                if not raw:
+                    self.ctrl.handle_error()
+                    break
+            except ConnectionResetError:
+
+                self.ctrl.handle_error()
                 break
 
+            try:
+                data = json.loads(raw.decode("utf-8"))
+                logger.info(f"Команда {data}")
+            except Exception:
+                continue
+
+            players = self.ctrl.handle_command(data)
+            if players:
+                self.gui_requested.emit(players)
+
+    def _send_to_srv(self, raw: bytes):
+        self.sock.sendall(raw)
+
     def close(self):
-        self.client_socket.close()
+        try:
+            self.sock.close()
+        except OSError:
+            logger.error("Error on close sock", OSError)
+
+    def _apply_state(self, cmd: str):
+        if not self.gui:
+            return
+        self.gui.apply_state(cmd)

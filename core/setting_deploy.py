@@ -2,17 +2,14 @@ import os
 import sys
 
 
-def get_resource_path(relative_path):
+def get_resource_path(relative_path: str) -> str:
+    """
+    Возвращает корректный абсолютный путь к ресурсу как при
+    запуске из-под PyInstaller, так и из-под исходников.
+    """
     if hasattr(sys, "_MEIPASS"):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
-
-
-def get_nicknames():
-    nicknames_file = "assets/nicknames.txt"
-    if os.path.exists(get_resource_path(nicknames_file)):
-        with open(nicknames_file, "r", encoding="utf-8") as file:
-            nicknames = [line.strip() for line in file.readlines()]
-            return nicknames
+        base = sys._MEIPASS
     else:
-        return ["Игрок1", "Игрок2", "Игрок3", "Игрок4"]
+        # __file__ указывает на тот модуль, в котором живёт этот код
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, relative_path)

@@ -1,61 +1,61 @@
 import random
+from typing import List
 
 from core.card import Card
+from logger import logger
+
+COLORS = ["red", "blue", "green", "yellow"]
+NUMBERS = [str(i) for i in range(10)]
+ACTIONS_COLOR = ["skip", "reverse", "draw two"]
+ACTIONS_WILD = ["wild", "draw four"]
 
 
 class Deck:
-    def __init__(self):
-        self.cards = self.generate_deck()
-        self.shuffle()
 
-    def generate_deck(self):
-        colors = ["red", "blue", "green", "yellow"]
-        values = [str(i) for i in range(10)]  # 0-9
-        action_cards = ["skip", "reverse", "draw two"]
-        wild_cards = ["wild", "draw four"]
+    def __init__(self) -> None:
+        self.cards: List[Card] = self._build()
 
-        deck = []
+    def _build(self) -> List[Card]:
+        deck: List[Card] = []
 
-        for color in colors:
-            deck.append(Card(color, "0"))
-            for value in values[1:]:
-                deck.append(Card(color, value))
-                deck.append(Card(color, value))
+        for col in COLORS:
+            deck.append(Card(col, "0"))
+            for num in NUMBERS[1:]:
+                deck.extend([Card(col, num)] * 2)
 
-            for action in action_cards:
-                deck.append(Card(color, action, action))
-                deck.append(Card(color, action, action))
+            for act in ACTIONS_COLOR:
+                deck.extend([Card(col, act, act)] * 2)
 
-        # Wild-карты (по 4 каждого типа)
         for _ in range(4):
             deck.append(Card("black", "wild", "wild"))
             deck.append(Card("black", "draw four", "draw four"))
 
+        random.shuffle(deck)
         return deck
 
+    def draw_card(self) -> Card:
+        card = self.cards.pop()
+        logger.info(f"Карта из колоды {card}")
+        logger.info(f"Колво карт в колоде {len(self.cards)}")
+        return card
+
+    def pop_card(self, card: Card):
+        for idx, c in enumerate(self.cards):
+            if (c.color, c.value, c.action) == (card.color, card.value, card.action):
+                return self.cards.pop(idx)
+        logger.error(f"Не удалось найти карту в колоде: {card}")
+
     def shuffle(self):
-        """
-        Перемешивает колоду.
-        """
         random.shuffle(self.cards)
 
-    def draw_card(self):
-        """
-        Берет одну карту из колоды.
-        """
-        return self.cards.pop() if self.cards else None
+    def deal_cards(self, nicknames: list[str], hand_size: int = 7) -> dict[str, list[Card]]:
+        return {nickname: [self.draw_card() for _ in range(hand_size)] for nickname in nicknames}
 
-    def deal_cards(self, num_players):
-        """
-        Раздает по 7 карт каждому игроку.
-        :param num_players: Количество игроков
-        :return: Список списков карт для каждого игрока
-        """
-        hands = [[] for _ in range(num_players)]
-        for _ in range(7):  # Раздаем по 7 карт
-            for hand in hands:
-                hand.append(self.draw_card())
-        return hands
+    def pick_start_card(self) -> Card:
+        for idx, c in enumerate(self.cards):
+            if c.color != "black" and c.value.isdigit():
+                return self.cards.pop(idx)
+        return self.draw_card()
 
-    def __repr__(self):
-        return f"Deck({len(self.cards)} карт)"
+    def __len__(self) -> int:
+        return len(self.cards)

@@ -1,50 +1,189 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Правила игры UNO</title>
+    <meta charset="utf-8">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 20px;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #222;
         }
-        .container {
-            max-width: 800px;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            margin: auto;
+
+        h1, h2 {
+            color: #c00;
+            margin-top: 1.2em
         }
-        h1 {
-            color: #d32f2f;
+
+        table {
+            border-collapse: collapse;
+            margin: 8px 0
         }
-        img {
-            width: 100%;
-            max-width: 400px;
-            margin: 10px 0;
-            border-radius: 10px;
+
+        td, th {
+            border: 1px solid #aaa;
+            padding: 4px 8px;
+            text-align: center
+        }
+
+        .card {
+            font-weight: bold
+        }
+
+        .red {
+            color: #ff5555
+        }
+
+        .blue {
+            color: #5555ff
+        }
+
+        .green {
+            color: #55aa55
+        }
+
+        .yellow {
+            color: #ffaa00
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Правила игры UNO</h1>
-        <p>UNO — популярная карточная игра, в которой цель — первым избавиться от всех своих карт.</p>
-        <h2>Основные правила:</h2>
-        <ul>
-            <li>Каждый игрок получает по 7 карт.</li>
-            <li>Игроки ходят по очереди, кладя карту соответствующего цвета или значения.</li>
-            <li>Специальные карты добавляют дополнительные эффекты.</li>
-            <li>Побеждает тот, кто первым избавится от всех карт.</li>
-            <li>Не забудьте сказать "UNO!", когда у вас остается одна карта.</li>
-        </ul>
-        <img src="uno_example.jpg" alt="Пример игры UNO">
-        <p>Желаем удачи в игре!</p>
-    </div>
+
+<h1>UNO – краткие правила</h1>
+
+<p><b>Цель игры</b> – первым избавиться от всех карт в руке и набрать очки за&nbsp;карты,
+    оставшиеся у соперников.</p>
+
+<h2>Состав колоды (108&nbsp;карт)</h2>
+<table>
+    <tr>
+        <th>Тип</th>
+        <th>Количество</th>
+        <th>Примечание</th>
+    </tr>
+    <tr>
+        <td class="card red">0-9</td>
+        <td>76</td>
+        <td>по&nbsp;2&nbsp;карты каждого номера и&nbsp;цвета, кроме&nbsp;«0» (по&nbsp;1)</td>
+    </tr>
+    <tr>
+        <td class="card yellow">Skip (⛔)</td>
+        <td>8</td>
+        <td>по&nbsp;2 каждого цвета</td>
+    </tr>
+    <tr>
+        <td class="card green">Reverse (↺)</td>
+        <td>8</td>
+        <td>по&nbsp;2 каждого цвета</td>
+    </tr>
+    <tr>
+        <td class="card blue">Draw Two (+2)</td>
+        <td>8</td>
+        <td>по&nbsp;2 каждого цвета</td>
+    </tr>
+    <tr>
+        <td class="card">Wild (смена цвета)</td>
+        <td>4</td>
+        <td>без цвета</td>
+    </tr>
+    <tr>
+        <td class="card">Wild Draw Four (+4)</td>
+        <td>4</td>
+        <td>без цвета</td>
+    </tr>
+</table>
+
+<h2>Подготовка</h2>
+<ol>
+    <li>Каждому игроку раздаётся <b>по&nbsp;7 карт</b>.</li>
+    <li>Оставшаяся колода кладётся рубашкой вниз; верхняя карта переворачивается – это
+        стартовая <i>верхняя карта</i>.
+    </li>
+    <li>Ход начинает игрок слева от сдающего.</li>
+</ol>
+
+<h2>Ход игрока</h2>
+<ul>
+    <li>Вы должны положить карту, у которой <b>цвет <u>или</u> значение</b>
+        совпадает с верхней картой стопки.<br>
+        <i>Пример:</i> на&nbsp;«синюю 7» можно сыграть любую синюю карту или любую «7».
+    </li>
+    <li>Если подходящей карты нет, берите из колоды
+        до первой, которую можно сыграть; её можно сыграть сразу же.
+    </li>
+    <li>Если карта сыграна, она становится новой верхней картой. Затем ход переходит
+        к следующему игроку (с учётом эффектов карт).
+    </li>
+</ul>
+
+<h2>Карта-действие</h2>
+<table>
+  <tr><th>Карта</th><th>Эффект</th></tr>
+
+  <!-- Skip -->
+  <tr>
+    <td>
+      <img src="assets/cards/red/skip.svg"
+           alt="Skip"   width="60" height="95">
+    </td>
+    <td>Следующий игрок пропускает ход.</td>
+  </tr>
+
+  <!-- Reverse -->
+  <tr>
+    <td>
+      <img src="assets/cards/green/reverse.svg"
+           alt="Reverse" width="60" height="95">
+    </td>
+    <td>Меняет направление хода.<br>
+        При игре вдвоём работает как <i>Skip</i>.
+    </td>
+  </tr>
+
+  <!-- Draw Two -->
+  <tr>
+    <td>
+      <img src="assets/cards/blue/draw-two.svg"
+           alt="+2" width="60" height="95">
+    </td>
+    <td>Следующий игрок берёт 2&nbsp;карты и&nbsp;пропускает ход.</td>
+  </tr>
+
+  <!-- Wild -->
+  <tr>
+    <td>
+      <img src="assets/cards/black/wild.svg"
+           alt="Wild" width="60" height="95">
+    </td>
+    <td>Игрок объявляет любой цвет (красный/синий/жёлтый/зелёный);
+        ход переходит дальше.</td>
+  </tr>
+
+  <!-- Wild Draw Four -->
+  <tr>
+    <td>
+      <img src="assets/cards/black/draw-four.svg"
+           alt="+4" width="60" height="95">
+    </td>
+    <td>Объявите цвет; следующий игрок берёт 4&nbsp;карты и&nbsp;пропускает ход.<br>
+
+    </td>
+  </tr>
+</table>
+
+<h2>Завершение раунда</h2>
+<p>Раунд заканчивается, когда кто-то выкладывает последнюю карту.</p>
+<ul>
+    <li>Остальные игроки суммируют очки своих карт
+        (цифровые = номинал, Skip/Reverse/+2 = 20 очков, Wild/Wild +4 = 50 очков).
+    </li>
+    <li>Победителю раунда добавляется эта сумма.</li>
+    <li>Полная партия идёт до 500 очков (или до договорённого лимита).</li>
+</ul>
+<h2>Важные моменты</h2>
+<ul>
+    <li>Если колода закончилась, перемешка сброса (кроме верхней карты) и образование новой колоды не будет.</li>
+</ul>
+
+<hr>
+<p style="text-align:center;font-size:90%">© UNO™ Mattel.</p>
 </body>
 </html>
