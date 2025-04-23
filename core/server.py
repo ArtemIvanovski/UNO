@@ -55,12 +55,13 @@ class Server(QObject):
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         message = f"{self.session_code}:{self.host}:{self.port}"
-
+        parts = self.host.split(".")
+        bcast = ".".join(parts[:3] + ["255"])
         while True:
             if len(self.clients) < self.value_players:
                 try:
-                    udp_socket.sendto(message.encode(), ("255.255.255.255", self.port))
-                    logger.info(f"Отправлен код сессии {self.session_code} по адресу 255.255.255.255:{self.port}")
+                    udp_socket.sendto(message.encode(), (bcast, self.port))
+                    logger.info(f"Отправлен код сессии {self.session_code} по адресу {bcast}:{self.port}")
                 except Exception as e:
                     logger.error(f"Ошибка отправки broadcast: {e}")
             threading.Event().wait(5)
