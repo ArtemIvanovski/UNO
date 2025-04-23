@@ -108,7 +108,7 @@ pip install -r requirements.txt
    - **Icon** → `assets/icon.ico`
    - **Additional Files** → `assets;assets`
 4. Нажать **Convert .py to .exe**.  
-   Результат появится в папке `dist/`.
+   Результат появится в папке `output/`.
 
 ---
 
